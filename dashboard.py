@@ -92,30 +92,55 @@ if not filtered_data.empty:
     col1.metric("Total EO", f"{total_eo}")
     col2.metric("Total PO", f"{total_po}")
 
-    # Calculate yearly totals for EO and PO
-    yearly_data = (
+    # 1) NEW CHART: Simplified comparison EO vs PO by YEAR
+    yearly_eo_po = (
         filtered_data.groupby(["YEAR", "TIPO"])["QTDE"]
         .sum()
         .reset_index()
     )
 
-    # Add visualization for yearly EO and PO
-    yearly_bar_chart = px.bar(
-        yearly_data,
+    comp_bar_chart = px.bar(
+        yearly_eo_po,
         x="YEAR",
         y="QTDE",
         color="TIPO",
         barmode="group",
-        text="QTDE",  # Add labels on top of the bars
-        title="Anual EO x PO 2020 à 2024",
+        text="QTDE",
+        title="Comparativo EO vs PO por Ano",
         labels={"QTDE": "Total Quantity", "YEAR": "Year", "TIPO": "Type"},
+        # Assign flashy colors for EO and PO
+        color_discrete_map={
+            "EO": "#E74C3C",  # Bright red
+            "PO": "#3498DB",  # Bright blue
+        }
     )
-    yearly_bar_chart.update_traces(textposition="outside")  # Position labels outside the bars
+    comp_bar_chart.update_traces(textposition="outside")
+    st.plotly_chart(comp_bar_chart, use_container_width=True)
+
+    # 2) EXISTING CHART: Anual EO x PO 2020 à 2024 (Stacked por CAM)
+    yearly_cam_data = (
+        filtered_data.groupby(["YEAR", "TIPO", "CAM"])["QTDE"]
+        .sum()
+        .reset_index()
+    )
+
+    yearly_bar_chart = px.bar(
+        yearly_cam_data,
+        x="YEAR",
+        y="QTDE",
+        color="CAM",
+        barmode="stack",
+        facet_col="TIPO",
+        text="QTDE",
+        title="Anual EO x PO 2020 à 2024 (Detalhado por CAM)",
+        labels={"QTDE": "Total Quantity", "YEAR": "Year", "CAM": "CAM"},
+    )
+    yearly_bar_chart.update_traces(textposition="outside")
     st.plotly_chart(yearly_bar_chart, use_container_width=True)
 
     # Add drill-down by year and process
     st.markdown("### Análise detalhada: Processos de Obtenção por ano")
-    selected_year = st.selectbox("Selecione um ano para análise detalhada do processo", yearly_data["YEAR"].unique())
+    selected_year = st.selectbox("Selecione um ano para análise detalhada do processo", yearly_cam_data["YEAR"].unique())
 
     # Filter data for the selected year
     year_filtered_data = filtered_data[filtered_data["YEAR"] == selected_year]
@@ -126,7 +151,6 @@ if not filtered_data.empty:
         .reset_index()
     )
 
-    # Create a bar chart for process-level analysis
     process_bar_chart = px.bar(
         process_summary,
         x="PROCESSO_AIP",
@@ -135,6 +159,11 @@ if not filtered_data.empty:
         barmode="group",
         title=f"Process-Level EO and PO for {selected_year}",
         labels={"QTDE": "Quantity", "PROCESSO_AIP": "Process", "TIPO": "Type"},
+        # Use the same flashy colors
+        color_discrete_map={
+            "EO": "#E74C3C",
+            "PO": "#3498DB",
+        }
     )
     st.plotly_chart(process_bar_chart, use_container_width=True)
 
@@ -150,7 +179,7 @@ if not filtered_data.empty:
         year_filtered_data,
         gridOptions=grid_options,
         height=400,
-        theme="balham",  # Use a valid theme: "streamlit", "alpine", "balham", "material"
+        theme="balham",  # Options: "streamlit", "alpine", "balham", "material"
         enable_enterprise_modules=False,
     )
 
