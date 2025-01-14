@@ -35,22 +35,35 @@ except Exception as e:
 st.sidebar.image("logo.png", width=150)  # Reduce the size of the logo
 st.sidebar.title("CSupAb - Viaturas")
 
+# Prepare sorted options for filters:
+# 1) CAM: put B001 at the top (if it exists), then keep others in ascending order
+cam_unique = sorted(data["CAM"].unique())
+if "B001" in cam_unique:
+    cam_unique.remove("B001")
+    cam_unique.insert(0, "B001")
+
+# 2) PI: from the lowest to highest
+pi_unique = sorted(data["PI"].unique())
+
+# 3) NOME_COLOQUIAL: alphabetical order
+nome_coloquial_unique = sorted(data["NOME_COLOQUIAL"].unique())
+
 # Filters
 pi_filter = st.sidebar.multiselect(
     "Filter by PI",
-    options=data["PI"].unique(),
+    options=pi_unique,
     default=None
 )
 
 cam_filter = st.sidebar.multiselect(
     "Filter by CAM",
-    options=data["CAM"].unique(),
+    options=cam_unique,
     default=None
 )
 
 nome_coloquial_filter = st.sidebar.multiselect(
     "Filter by NOME_COLOQUIAL",
-    options=data["NOME_COLOQUIAL"].unique(),
+    options=nome_coloquial_unique,
     default=None
 )
 
@@ -108,7 +121,6 @@ if not filtered_data.empty:
         text="QTDE",
         title="Comparativo EO vs PO por Ano",
         labels={"QTDE": "Total Quantity", "YEAR": "Year", "TIPO": "Type"},
-        # Assign flashy colors for EO and PO
         color_discrete_map={
             "EO": "#E74C3C",  # Bright red
             "PO": "#3498DB",  # Bright blue
@@ -159,7 +171,6 @@ if not filtered_data.empty:
         barmode="group",
         title=f"Process-Level EO and PO for {selected_year}",
         labels={"QTDE": "Quantity", "PROCESSO_AIP": "Process", "TIPO": "Type"},
-        # Use the same flashy colors
         color_discrete_map={
             "EO": "#E74C3C",
             "PO": "#3498DB",
@@ -179,7 +190,7 @@ if not filtered_data.empty:
         year_filtered_data,
         gridOptions=grid_options,
         height=400,
-        theme="balham",  # Options: "streamlit", "alpine", "balham", "material"
+        theme="balham",
         enable_enterprise_modules=False,
     )
 
