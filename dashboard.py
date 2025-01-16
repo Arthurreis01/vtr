@@ -6,8 +6,7 @@ import plotly.express as px
 # Load data with the correct delimiter
 try:
     data = pd.read_csv("data-vtr.csv", encoding="latin1", delimiter=";")
-    # Clean column names
-    data.columns = data.columns.str.strip()
+    data.columns = data.columns.str.strip()  # Clean column names
 except FileNotFoundError:
     st.error("The file 'data-vtr.csv' was not found. Please ensure it is in the correct directory.")
     st.stop()
@@ -32,42 +31,10 @@ except Exception as e:
     st.stop()
 
 # Sidebar
-st.sidebar.image("logo.png", width=150)  # Reduce the size of the logo
+st.sidebar.image("logo.png", width=150)
 st.sidebar.title("CSupAb - Viaturas")
 
-# Prepare sorted options for filters:
-# 1) CAM: put B001 at the top (if it exists), then keep others in ascending order
-cam_unique = sorted(data["CAM"].unique())
-if "B001" in cam_unique:
-    cam_unique.remove("B001")
-    cam_unique.insert(0, "B001")
-
-# 2) PI: from the lowest to highest
-pi_unique = sorted(data["PI"].unique())
-
-# 3) NOME_COLOQUIAL: alphabetical order
-nome_coloquial_unique = sorted(data["NOME_COLOQUIAL"].unique())
-
 # Filters
-pi_filter = st.sidebar.multiselect(
-    "Filter by PI",
-    options=pi_unique,
-    default=None
-)
-
-cam_filter = st.sidebar.multiselect(
-    "Filter by CAM",
-    options=cam_unique,
-    default=None
-)
-
-nome_coloquial_filter = st.sidebar.multiselect(
-    "Filter by NOME_COLOQUIAL",
-    options=nome_coloquial_unique,
-    default=None
-)
-
-# Year Range Filter
 year_min = int(data["YEAR"].min())
 year_max = int(data["YEAR"].max())
 year_range = st.sidebar.slider(
@@ -77,20 +44,76 @@ year_range = st.sidebar.slider(
     value=(year_min, year_max)
 )
 
+cam_filter = st.sidebar.multiselect(
+    "Filter by CAM",
+    options=sorted(data["CAM"].unique()),
+    default=None
+)
+
+pi_filter = st.sidebar.multiselect(
+    "Filter by PI",
+    options=sorted(data["PI"].unique()),
+    default=None
+)
+
+nome_coloquial_filter = st.sidebar.multiselect(
+    "Filter by NOME_COLOQUIAL",
+    options=sorted(data["NOME_COLOQUIAL"].unique()),
+    default=None
+)
+
+process_filter = st.sidebar.multiselect(
+    "Filter by Process (PROCESSO_AIP)",
+    options=sorted(data["PROCESSO_AIP"].unique()),
+    default=None
+)
+
 # Apply filters
 filtered_data = data[(data["YEAR"] >= year_range[0]) & (data["YEAR"] <= year_range[1])]
 
-if pi_filter:
-    filtered_data = filtered_data[filtered_data["PI"].isin(pi_filter)]
 if cam_filter:
     filtered_data = filtered_data[filtered_data["CAM"].isin(cam_filter)]
+if pi_filter:
+    filtered_data = filtered_data[filtered_data["PI"].isin(pi_filter)]
 if nome_coloquial_filter:
     filtered_data = filtered_data[filtered_data["NOME_COLOQUIAL"].isin(nome_coloquial_filter)]
+if process_filter:
+    filtered_data = filtered_data[filtered_data["PROCESSO_AIP"].isin(process_filter)]
 
 # Main content
-st.markdown("## Dashboard de Análise de EO e PO")
+st.markdown("## Dashboard de Análise de EO e PO por Produto e Processo")
 
 if not filtered_data.empty:
+    # Summarize EO and PO by Product and Process
+    product_process_summary = (
+        filtered_data.groupby(["PI", "PROCESSO_AIP", "TIPO"])["QTDE"]
+        .sum()
+        .reset_index()
+    )
+
+    # Adjust the spacing to fit all facets
+    facet_col_spacing = 0.01  # Reduced spacing between facet columns
+
+    # Chart: EO vs PO by Product and Process
+    try:
+        product_process_chart = px.bar(
+            product_process_summary,
+            x="PI",
+            y="QTDE",
+            color="TIPO",
+            barmode="group",
+            facet_col="PROCESSO_AIP",
+            text="QTDE",
+            title="Comparativo EO vs PO por Produto e Processo",
+            labels={"QTDE": "Quantity", "PI": "Product (PI)", "PROCESSO_AIP": "Process", "TIPO": "Type"},
+            facet_col_spacing=facet_col_spacing,  # Adjusted spacing
+            color_discrete_map={"EO": "#E74C3C", "PO": "#3498DB"}
+        )
+        product_process_chart.update_traces(textposition="outside")
+        st.plotly_chart(product_process_chart, use_container_width=True)
+    except ValueError as e:
+        st.error(f"Failed to create the chart due to spacing constraints: {e}")
+
     # Total EO and PO Summaries
     total_summary = (
         filtered_data.groupby("TIPO")["QTDE"]
@@ -105,100 +128,27 @@ if not filtered_data.empty:
     col1.metric("Total EO", f"{total_eo}")
     col2.metric("Total PO", f"{total_po}")
 
-    # 1) NEW CHART: Simplified comparison EO vs PO by YEAR
-    yearly_eo_po = (
-        filtered_data.groupby(["YEAR", "TIPO"])["QTDE"]
-        .sum()
-        .reset_index()
-    )
-
-    comp_bar_chart = px.bar(
-        yearly_eo_po,
-        x="YEAR",
-        y="QTDE",
-        color="TIPO",
-        barmode="group",
-        text="QTDE",
-        title="Comparativo EO vs PO por Ano",
-        labels={"QTDE": "Total Quantity", "YEAR": "Year", "TIPO": "Type"},
-        color_discrete_map={
-            "EO": "#E74C3C",  # Bright red
-            "PO": "#3498DB",  # Bright blue
-        }
-    )
-    comp_bar_chart.update_traces(textposition="outside")
-    st.plotly_chart(comp_bar_chart, use_container_width=True)
-
-    # 2) EXISTING CHART: Anual EO x PO 2020 à 2024 (Stacked por CAM)
-    yearly_cam_data = (
-        filtered_data.groupby(["YEAR", "TIPO", "CAM"])["QTDE"]
-        .sum()
-        .reset_index()
-    )
-
-    yearly_bar_chart = px.bar(
-        yearly_cam_data,
-        x="YEAR",
-        y="QTDE",
-        color="CAM",
-        barmode="stack",
-        facet_col="TIPO",
-        text="QTDE",
-        title="Anual EO x PO 2020 à 2024 (Detalhado por CAM)",
-        labels={"QTDE": "Total Quantity", "YEAR": "Year", "CAM": "CAM"},
-    )
-    yearly_bar_chart.update_traces(textposition="outside")
-    st.plotly_chart(yearly_bar_chart, use_container_width=True)
-
-    # Add drill-down by year and process
-    st.markdown("### Análise detalhada: Processos de Obtenção por ano")
-    selected_year = st.selectbox("Selecione um ano para análise detalhada do processo", yearly_cam_data["YEAR"].unique())
-
-    # Filter data for the selected year
-    year_filtered_data = filtered_data[filtered_data["YEAR"] == selected_year]
-
-    process_summary = (
-        year_filtered_data.groupby(["PROCESSO_AIP", "TIPO"])["QTDE"]
-        .sum()
-        .reset_index()
-    )
-
-    process_bar_chart = px.bar(
-        process_summary,
-        x="PROCESSO_AIP",
-        y="QTDE",
-        color="TIPO",
-        barmode="group",
-        title=f"Process-Level EO and PO for {selected_year}",
-        labels={"QTDE": "Quantity", "PROCESSO_AIP": "Process", "TIPO": "Type"},
-        color_discrete_map={
-            "EO": "#E74C3C",
-            "PO": "#3498DB",
-        }
-    )
-    st.plotly_chart(process_bar_chart, use_container_width=True)
-
     # Display detailed table using Ag-Grid
-    st.markdown(f"### Dados detalhados de {selected_year}")
-    gb = GridOptionsBuilder.from_dataframe(year_filtered_data)
-    gb.configure_pagination(paginationAutoPageSize=True)  # Enable pagination
-    gb.configure_side_bar()  # Enable sidebar filters
-    gb.configure_default_column(groupable=True, editable=True)  # Allow grouping and editing
+    st.markdown("### Detalhes dos Dados Filtrados")
+    gb = GridOptionsBuilder.from_dataframe(product_process_summary)
+    gb.configure_pagination(paginationAutoPageSize=True)
+    gb.configure_side_bar()
+    gb.configure_default_column(groupable=True, editable=True)
     grid_options = gb.build()
 
     AgGrid(
-        year_filtered_data,
+        product_process_summary,
         gridOptions=grid_options,
         height=400,
         theme="balham",
         enable_enterprise_modules=False,
     )
 
-    # Add download button for the filtered data
+    # Add download button for the product-process summary
     st.download_button(
         label="Download Detailed Data as CSV",
-        data=year_filtered_data.to_csv(index=False).encode("utf-8"),
-        file_name=f"detailed_data_{selected_year}.csv",
+        data=product_process_summary.to_csv(index=False).encode("utf-8"),
+        file_name="product_process_summary.csv",
         mime="text/csv",
     )
 else:
