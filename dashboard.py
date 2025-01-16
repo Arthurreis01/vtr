@@ -82,6 +82,19 @@ if process_filter:
 
 # Main content
 st.markdown("## Dashboard de Análise de EO e PO por Produto e Processo")
+# Total EO and PO Summaries
+    total_summary = (
+        filtered_data.groupby("TIPO")["QTDE"]
+        .sum()
+        .reset_index()
+    )
+
+    total_eo = total_summary.loc[total_summary["TIPO"] == "EO", "QTDE"].sum()
+    total_po = total_summary.loc[total_summary["TIPO"] == "PO", "QTDE"].sum()
+
+    col1, col2 = st.columns(2)
+    col1.metric("Total EO", f"{total_eo}")
+    col2.metric("Total PO", f"{total_po}")
 
 if not filtered_data.empty:
     # Summarize EO and PO by Product and Process
@@ -114,19 +127,7 @@ if not filtered_data.empty:
     except ValueError as e:
         st.error(f"Failed to create the chart due to spacing constraints: {e}")
 
-    # Total EO and PO Summaries
-    total_summary = (
-        filtered_data.groupby("TIPO")["QTDE"]
-        .sum()
-        .reset_index()
-    )
-
-    total_eo = total_summary.loc[total_summary["TIPO"] == "EO", "QTDE"].sum()
-    total_po = total_summary.loc[total_summary["TIPO"] == "PO", "QTDE"].sum()
-
-    col1, col2 = st.columns(2)
-    col1.metric("Total EO", f"{total_eo}")
-    col2.metric("Total PO", f"{total_po}")
+    
 
     # Display detailed table using Ag-Grid
     st.markdown("### Detalhes dos Dados Filtrados")
