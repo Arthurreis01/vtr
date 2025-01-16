@@ -84,9 +84,9 @@ if process_filter:
 st.markdown("## Dashboard de Análise de EO e PO por Produto e Processo")
 
 if not filtered_data.empty:
-    # Summarize EO and PO by Product, Process, and CAM
+    # Summarize EO and PO by Product and Process
     product_process_summary = (
-        filtered_data.groupby(["PI", "PROCESSO_AIP", "CAM", "TIPO"])["QTDE"]
+        filtered_data.groupby(["PI", "PROCESSO_AIP", "TIPO"])["QTDE"]
         .sum()
         .reset_index()
     )
@@ -94,7 +94,7 @@ if not filtered_data.empty:
     # Adjust the spacing to fit all facets
     facet_col_spacing = 0.01  # Reduced spacing between facet columns
 
-    # Chart: EO vs PO by Product, Process, and CAM
+    # Chart: EO vs PO by Product and Process
     try:
         product_process_chart = px.bar(
             product_process_summary,
@@ -102,11 +102,10 @@ if not filtered_data.empty:
             y="QTDE",
             color="TIPO",
             barmode="group",
-            facet_col="CAM",
-            facet_row="PROCESSO_AIP",
+            facet_col="PROCESSO_AIP",
             text="QTDE",
-            title="Comparativo EO vs PO por Produto, Processo e CAM",
-            labels={"QTDE": "Quantity", "PI": "Product (PI)", "PROCESSO_AIP": "Process", "CAM": "CAM", "TIPO": "Type"},
+            title="Comparativo EO vs PO por Produto e Processo",
+            labels={"QTDE": "Quantity", "PI": "Product (PI)", "PROCESSO_AIP": "Process", "TIPO": "Type"},
             facet_col_spacing=facet_col_spacing,  # Adjusted spacing
             color_discrete_map={"EO": "#E74C3C", "PO": "#3498DB"}
         )
