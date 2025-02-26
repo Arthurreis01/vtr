@@ -151,8 +151,8 @@ if not filtered_data.empty:
                 "PROCESSO_AIP": list(process_summary["PROCESSO_AIP"].unique())
             },
             color_discrete_map={
-                "EO": "#1F77B4",   # Dark blue for EO
-                "PO": "#2CA02C"    # Green for PO
+                "EO": "#E53D00",   # Dark blue for EO
+                "PO": "#B9E3C6"    # Green for PO
             }
         )
         chart_by_process.update_traces(textposition="outside")
