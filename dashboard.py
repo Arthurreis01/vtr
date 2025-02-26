@@ -34,7 +34,8 @@ except Exception as e:
 st.sidebar.image("logo.png", width=150)
 st.sidebar.title("CSupAb - Viaturas")
 
-# Filters
+# Prepare filters:
+# Year Range Filter
 year_min = int(data["YEAR"].min())
 year_max = int(data["YEAR"].max())
 year_range = st.sidebar.slider(
@@ -44,6 +45,7 @@ year_range = st.sidebar.slider(
     value=(year_min, year_max)
 )
 
+# Filters for CAM, PI, NOME_COLOQUIAL, and PROCESSO_AIP
 cam_filter = st.sidebar.multiselect(
     "Filter by CAM",
     options=sorted(data["CAM"].unique()),
@@ -84,37 +86,14 @@ if process_filter:
 st.markdown("## Dashboard de Análise de EO e PO por Produto e Processo")
 
 if not filtered_data.empty:
-    # Summarize EO and PO by Product and Process
+    # Summarize EO and PO by Product, Process, and CAM
     product_process_summary = (
-        filtered_data.groupby(["PI", "PROCESSO_AIP", "TIPO"])["QTDE"]
+        filtered_data.groupby(["PI", "PROCESSO_AIP", "CAM", "TIPO"])["QTDE"]
         .sum()
         .reset_index()
     )
 
-    # Adjust the spacing to fit all facets
-    facet_col_spacing = 0.01  # Reduced spacing between facet columns
-
-    # Chart: EO vs PO by Product and Process
-    try:
-        product_process_chart = px.bar(
-            product_process_summary,
-            x="PI",
-            y="QTDE",
-            color="TIPO",
-            barmode="group",
-            facet_col="PROCESSO_AIP",
-            text="QTDE",
-            title="Comparativo EO vs PO por Produto e Processo",
-            labels={"QTDE": "Quantity", "PI": "Product (PI)", "PROCESSO_AIP": "Process", "TIPO": "Type"},
-            facet_col_spacing=facet_col_spacing,  # Adjusted spacing
-            color_discrete_map={"EO": "#E74C3C", "PO": "#3498DB"}
-        )
-        product_process_chart.update_traces(textposition="outside")
-        st.plotly_chart(product_process_chart, use_container_width=True)
-    except ValueError as e:
-        st.error(f"Failed to create the chart due to spacing constraints: {e}")
-
-    # Total EO and PO Summaries
+    # Total EO and PO Summaries (Move up above the graph)
     total_summary = (
         filtered_data.groupby("TIPO")["QTDE"]
         .sum()
@@ -127,6 +106,45 @@ if not filtered_data.empty:
     col1, col2 = st.columns(2)
     col1.metric("Total EO", f"{total_eo}")
     col2.metric("Total PO", f"{total_po}")
+
+    # Chart: EO vs PO by Product, Process, and CAM
+    try:
+        product_process_chart = px.bar(
+            product_process_summary,
+            x="PROCESSO_AIP",
+            y="QTDE",
+            color="TIPO",
+            barmode="group",
+            facet_col="CAM",
+            text="QTDE",
+            title="Comparativo EO vs PO por Processo e CAM",
+            labels={"QTDE": "Quantity", "PROCESSO_AIP": "Process", "CAM": "CAM", "TIPO": "Type"},
+            facet_col_spacing=0.01,  # Adjusted spacing
+            color_discrete_map={"EO": "#E74C3C", "PO": "#3498DB"}
+        )
+        product_process_chart.update_traces(textposition="outside")
+        st.plotly_chart(product_process_chart, use_container_width=True)
+    except ValueError as e:
+        st.error(f"Failed to create the chart due to spacing constraints: {e}")
+
+    # Chart: EO vs PO by Product (Grouped by CAM)
+    try:
+        cam_chart = px.bar(
+            product_process_summary,
+            x="PI",
+            y="QTDE",
+            color="TIPO",
+            barmode="group",
+            facet_col="CAM",
+            text="QTDE",
+            title="Comparativo EO vs PO por Produto (Dividido por CAM)",
+            labels={"QTDE": "Quantity", "PI": "Product (PI)", "CAM": "CAM", "TIPO": "Type"},
+            color_discrete_map={"EO": "#E74C3C", "PO": "#3498DB"}
+        )
+        cam_chart.update_traces(textposition="outside")
+        st.plotly_chart(cam_chart, use_container_width=True)
+    except ValueError as e:
+        st.error(f"Failed to create the chart due to spacing constraints: {e}")
 
     # Display detailed table using Ag-Grid
     st.markdown("### Detalhes dos Dados Filtrados")
