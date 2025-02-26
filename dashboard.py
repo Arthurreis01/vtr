@@ -114,7 +114,7 @@ if not filtered_data.empty:
 
     # -------------------------------------------------------------------------
     # STEP 2: One chart only by PROCESSO_AIP (grouped bars)
-    # with bars for EO and PO in red shades
+    # with bars for EO and PO in new colors (dark blue for EO, green for PO)
     # -------------------------------------------------------------------------
     # Summarize by process + TIPO
     process_summary = (
@@ -132,7 +132,7 @@ if not filtered_data.empty:
     process_summary = process_summary.merge(earliest_dates, on="PROCESSO_AIP", how="left")
     process_summary = process_summary.sort_values(by="EARLIEST_DATE", ascending=True)
 
-    # Chart #1: Grouped bar by process, color=TIPO (both bars in red shades)
+    # Chart #1: Grouped bar by process, color=TIPO (both bars in new colors)
     try:
         chart_by_process = px.bar(
             process_summary,
@@ -151,8 +151,8 @@ if not filtered_data.empty:
                 "PROCESSO_AIP": list(process_summary["PROCESSO_AIP"].unique())
             },
             color_discrete_map={
-                "EO": "#FF0000",   # bright red for EO
-                "PO": "#FF6666"    # lighter red for PO
+                "EO": "#1F77B4",   # Dark blue for EO
+                "PO": "#2CA02C"    # Green for PO
             }
         )
         chart_by_process.update_traces(textposition="outside")
@@ -161,48 +161,7 @@ if not filtered_data.empty:
         st.error(f"Failed to create Chart #1: {e}")
 
     # -------------------------------------------------------------------------
-    # STEP 3: Another chart: stacked bar by PROCESSO_AIP, with 2 bars for PO and EO
-    # Actually we'll do facet_col='TIPO' => two columns (EO, PO), each stacked by CAM
-    # -------------------------------------------------------------------------
-    process_cam_summary = (
-        filtered_data.groupby(["PROCESSO_AIP", "TIPO", "CAM"])["QTDE"]
-        .sum()
-        .reset_index()
-    )
-    # Merge earliest date for consistent sorting
-    process_cam_summary = process_cam_summary.merge(earliest_dates, on="PROCESSO_AIP", how="left")
-    process_cam_summary = process_cam_summary.sort_values(by="EARLIEST_DATE", ascending=True)
-
-    # We create a facet for each TIPO, so the user sees 2 columns: EO / PO, stacked by CAM
-    try:
-        chart_stacked = px.bar(
-            process_cam_summary,
-            x="PROCESSO_AIP",
-            y="QTDE",
-            color="CAM",
-            barmode="stack",
-            facet_col="TIPO",
-            text="QTDE",
-            title="Comparativo EO vs PO (Barra Empilhada por CAM)",
-            labels={
-                "PROCESSO_AIP": "Process",
-                "QTDE": "Quantity",
-                "CAM": "CAM",
-                "TIPO": "Type"
-            },
-            category_orders={
-                "PROCESSO_AIP": list(process_cam_summary["PROCESSO_AIP"].unique()),
-                "TIPO": ["EO", "PO"]  # ensure EO is left, PO is right
-            },
-            facet_col_spacing=0.02
-        )
-        chart_stacked.update_traces(textposition="outside")
-        st.plotly_chart(chart_stacked, use_container_width=True)
-    except ValueError as e:
-        st.error(f"Failed to create Chart #2: {e}")
-
-    # -------------------------------------------------------------------------
-    # STEP 4: Display Table and Download
+    # STEP 3: Display Table and Download
     # -------------------------------------------------------------------------
     st.markdown("### Detalhes dos Dados Filtrados")
 
