@@ -76,6 +76,7 @@ year_range = st.sidebar.slider(
 
 # Apply filters
 filtered_data = data.copy()
+
 if cam_filter:
     filtered_data = filtered_data[filtered_data["CAM"].isin(cam_filter)]
 if pi_filter:
@@ -96,9 +97,8 @@ st.markdown("## Dashboard de Análise de EO e PO por Processo")
 
 if not filtered_data.empty:
     # -------------------------------------------------------------------------
-    # STEP 1: Summaries
+    # STEP 1: Summaries - Move above the graphs
     # -------------------------------------------------------------------------
-    # Summarize total EO and PO
     total_summary = (
         filtered_data.groupby("TIPO")["QTDE"]
         .sum()
@@ -108,33 +108,31 @@ if not filtered_data.empty:
     total_eo = total_summary.loc[total_summary["TIPO"] == "EO", "QTDE"].sum()
     total_po = total_summary.loc[total_summary["TIPO"] == "PO", "QTDE"].sum()
 
-    # Display EO/PO above the charts
     col1, col2 = st.columns(2)
     col1.metric("Total EO", f"{total_eo}")
     col2.metric("Total PO", f"{total_po}")
 
     # -------------------------------------------------------------------------
     # STEP 2: One chart only by PROCESSO_AIP (grouped bars)
+    # with bars for EO and PO in red shades
     # -------------------------------------------------------------------------
-    # Group by process and TIPO
+    # Summarize by process + TIPO
     process_summary = (
         filtered_data.groupby(["PROCESSO_AIP", "TIPO"])["QTDE"]
         .sum()
         .reset_index()
     )
 
-    # In order to sort by oldest date, we find the earliest date for each PROCESSO_AIP
+    # Find earliest date per PROCESSO_AIP for sorting
     earliest_dates = (
         filtered_data.groupby("PROCESSO_AIP", as_index=False)["DATA"]
         .min()
         .rename(columns={"DATA": "EARLIEST_DATE"})
     )
     process_summary = process_summary.merge(earliest_dates, on="PROCESSO_AIP", how="left")
-
-    # Sort by earliest date
     process_summary = process_summary.sort_values(by="EARLIEST_DATE", ascending=True)
 
-    # Create grouped bar chart by process (TIPO)
+    # Chart #1: Grouped bar by process, color=TIPO (both bars in red shades)
     try:
         chart_by_process = px.bar(
             process_summary,
@@ -143,69 +141,91 @@ if not filtered_data.empty:
             color="TIPO",
             barmode="group",
             text="QTDE",
-            title="Comparativo EO vs PO por Processo (em ordem cronológica)",
-            labels={"PROCESSO_AIP": "Process", "QTDE": "Quantity", "TIPO": "Type"},
+            title="Comparativo EO vs PO por Processo (Ordem Cronológica)",
+            labels={
+                "PROCESSO_AIP": "Process",
+                "QTDE": "Quantity",
+                "TIPO": "Type"
+            },
+            category_orders={
+                "PROCESSO_AIP": list(process_summary["PROCESSO_AIP"].unique())
+            },
+            color_discrete_map={
+                "EO": "#FF0000",   # bright red for EO
+                "PO": "#FF6666"    # lighter red for PO
+            }
         )
         chart_by_process.update_traces(textposition="outside")
         st.plotly_chart(chart_by_process, use_container_width=True)
     except ValueError as e:
-        st.error(f"Failed to create the chart: {e}")
+        st.error(f"Failed to create Chart #1: {e}")
 
     # -------------------------------------------------------------------------
-    # STEP 3: Another chart: stacked bar by process, divided by CAM
+    # STEP 3: Another chart: stacked bar by PROCESSO_AIP, with 2 bars for PO and EO
+    # Actually we'll do facet_col='TIPO' => two columns (EO, PO), each stacked by CAM
     # -------------------------------------------------------------------------
-    # Group by process & CAM
     process_cam_summary = (
-        filtered_data.groupby(["PROCESSO_AIP", "CAM"])["QTDE"]
+        filtered_data.groupby(["PROCESSO_AIP", "TIPO", "CAM"])["QTDE"]
         .sum()
         .reset_index()
     )
-    # Merge earliest date for sorting
+    # Merge earliest date for consistent sorting
     process_cam_summary = process_cam_summary.merge(earliest_dates, on="PROCESSO_AIP", how="left")
     process_cam_summary = process_cam_summary.sort_values(by="EARLIEST_DATE", ascending=True)
 
-    # Create stacked bar chart: x=PROCESSO_AIP, color=CAM, barmode="stack"
+    # We create a facet for each TIPO, so the user sees 2 columns: EO / PO, stacked by CAM
     try:
-        chart_by_cam_stack = px.bar(
+        chart_stacked = px.bar(
             process_cam_summary,
             x="PROCESSO_AIP",
             y="QTDE",
             color="CAM",
             barmode="stack",
+            facet_col="TIPO",
             text="QTDE",
-            title="Comparativo EO vs PO por Processo, Empilhado por CAM",
-            labels={"PROCESSO_AIP": "Process", "QTDE": "Quantity", "CAM": "CAM"},
+            title="Comparativo EO vs PO (Barra Empilhada por CAM)",
+            labels={
+                "PROCESSO_AIP": "Process",
+                "QTDE": "Quantity",
+                "CAM": "CAM",
+                "TIPO": "Type"
+            },
+            category_orders={
+                "PROCESSO_AIP": list(process_cam_summary["PROCESSO_AIP"].unique()),
+                "TIPO": ["EO", "PO"]  # ensure EO is left, PO is right
+            },
+            facet_col_spacing=0.02
         )
-        chart_by_cam_stack.update_traces(textposition="outside")
-        st.plotly_chart(chart_by_cam_stack, use_container_width=True)
+        chart_stacked.update_traces(textposition="outside")
+        st.plotly_chart(chart_stacked, use_container_width=True)
     except ValueError as e:
-        st.error(f"Failed to create the stacked chart: {e}")
+        st.error(f"Failed to create Chart #2: {e}")
 
     # -------------------------------------------------------------------------
-    # STEP 4: Display detailed table and download
+    # STEP 4: Display Table and Download
     # -------------------------------------------------------------------------
     st.markdown("### Detalhes dos Dados Filtrados")
 
-    # We show the table for the 'process_summary' or 'process_cam_summary' if you prefer
-    # For demonstration, let's show 'process_summary'
-    gb = GridOptionsBuilder.from_dataframe(process_summary)
+    # We'll display 'process_summary' in the table, dropping the date column used for sorting
+    table_df = process_summary.drop(columns="EARLIEST_DATE")
+
+    gb = GridOptionsBuilder.from_dataframe(table_df)
     gb.configure_pagination(paginationAutoPageSize=True)
     gb.configure_side_bar()
     gb.configure_default_column(groupable=True, editable=True)
     grid_options = gb.build()
 
     AgGrid(
-        process_summary,
+        table_df,
         gridOptions=grid_options,
         height=400,
         theme="balham",
         enable_enterprise_modules=False,
     )
 
-    # Download button for 'process_summary'
     st.download_button(
         label="Download Detailed Data as CSV",
-        data=process_summary.drop(columns="EARLIEST_DATE").to_csv(index=False).encode("utf-8"),
+        data=table_df.to_csv(index=False).encode("utf-8"),
         file_name="process_summary.csv",
         mime="text/csv",
     )
