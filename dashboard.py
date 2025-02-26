@@ -152,7 +152,7 @@ if not filtered_data.empty:
             },
             color_discrete_map={
                 "EO": "#E53D00",   # Dark blue for EO
-                "PO": "#B9E3C6"    # Green for PO
+                "PO": "#F0A202"    # Green for PO
             }
         )
         chart_by_process.update_traces(textposition="outside")
