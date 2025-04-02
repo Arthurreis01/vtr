@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 
+st.set_page_config(layout='wide', initial_sidebar_state='expanded')
 # Load data with the correct delimiter
 try:
     data = pd.read_csv("data-vtr.csv", encoding="latin1", delimiter=";")
