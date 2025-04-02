@@ -12,7 +12,6 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 # =========================
 st.set_page_config(layout='wide', initial_sidebar_state='expanded')
 try:
-    # Load data with the correct delimiter
     data = pd.read_csv("data-vtr.csv", encoding="latin1", delimiter=";")
     data.columns = data.columns.str.strip()  # Clean column names
 except FileNotFoundError:
@@ -24,12 +23,10 @@ except Exception as e:
 
 required_columns = ["DATA", "PI", "CAM", "TIPO", "QTDE", "NOME_COLOQUIAL", "PROCESSO_AIP"]
 missing_columns = [col for col in required_columns if col not in data.columns]
-
 if missing_columns:
     st.error(f"The dataset is missing the following required columns: {missing_columns}")
     st.stop()
 
-# Convert 'DATA' to datetime
 try:
     data["DATA"] = pd.to_datetime(data["DATA"], format="%d/%m/%Y")
     data["YEAR"] = data["DATA"].dt.year  # Extract year for filtering
@@ -91,7 +88,6 @@ if nome_coloquial_filter:
     filtered_data = filtered_data[filtered_data["NOME_COLOQUIAL"].isin(nome_coloquial_filter)]
 if process_filter:
     filtered_data = filtered_data[filtered_data["PROCESSO_AIP"].isin(process_filter)]
-
 filtered_data = filtered_data[
     (filtered_data["YEAR"] >= year_range[0]) & (filtered_data["YEAR"] <= year_range[1])
 ]
@@ -103,14 +99,13 @@ st.markdown("## Dashboard de Análise de EO e PO por Processo")
 
 if not filtered_data.empty:
     # -------------------------------------------------------------------------
-    # STEP 1: Summaries
+    # STEP 1: Summaries (Total EO and PO)
     # -------------------------------------------------------------------------
     total_summary = (
         filtered_data.groupby("TIPO")["QTDE"]
         .sum()
         .reset_index()
     )
-
     total_eo = total_summary.loc[total_summary["TIPO"] == "EO", "QTDE"].sum()
     total_po = total_summary.loc[total_summary["TIPO"] == "PO", "QTDE"].sum()
 
@@ -119,15 +114,15 @@ if not filtered_data.empty:
     col2.metric("Total PO", f"{total_po}")
 
     # -------------------------------------------------------------------------
-    # STEP 2: CHART BY PROCESS (EO vs PO) - GROUPED
+    # STEP 2: Chart by Process (Grouped Bar Chart)
     # -------------------------------------------------------------------------
+    # Summarize data by PROCESSO_AIP and TIPO
     process_summary = (
         filtered_data.groupby(["PROCESSO_AIP", "TIPO"])["QTDE"]
         .sum()
         .reset_index()
     )
-
-    # Sort by earliest date
+    # Determine the earliest date per process for chronological order
     earliest_dates = (
         filtered_data.groupby("PROCESSO_AIP", as_index=False)["DATA"]
         .min()
@@ -154,8 +149,8 @@ if not filtered_data.empty:
                 "PROCESSO_AIP": list(process_summary["PROCESSO_AIP"].unique())
             },
             color_discrete_map={
-                "EO": "#1F77B4",   # Dark blue for EO
-                "PO": "#2CA02C"    # Green for PO
+                "EO": "#B22222",   # Dark red for EO
+                "PO": "#CD5C5C"    # Lighter red for PO
             }
         )
         chart_by_process.update_traces(textposition="outside")
@@ -167,9 +162,7 @@ if not filtered_data.empty:
     # STEP 3: MACHINE LEARNING (Simple Example)
     # -------------------------------------------------------------------------
     st.markdown("## Previsão de Próximo EO (Exemplo Simplificado)")
-
-    # 1) Prepare data: pivot so we have columns EO, PO
-    #    We'll do a basic approach: pivot TIPO => columns.
+    # Pivot the data so that each PROCESSO_AIP has EO and PO columns
     pivot_df = (
         filtered_data.groupby(["PROCESSO_AIP", "TIPO"], as_index=False)["QTDE"]
         .sum()
@@ -177,44 +170,35 @@ if not filtered_data.empty:
         .fillna(0)
         .reset_index()
     )
-    # pivot_df columns: [PROCESSO_AIP, EO, PO]
-
-    # 2) Merge earliest date for sorting & optionally the # of unique items
+    # Merge earliest date for ordering
     pivot_df = pivot_df.merge(earliest_dates, on="PROCESSO_AIP", how="left")
     pivot_df.sort_values("EARLIEST_DATE", inplace=True)
-
-    # 3) Create features: e.g., use PO as predictor, predict EO
-    #    This is extremely naive: next process's EO from current PO
+    
+    # Create a shift: predict next process's EO from current PO (very naive)
     if "PO" not in pivot_df.columns:
-        pivot_df["PO"] = 0  # If no PO found
-
-    # We'll create a shift as if we want to predict next EO from current PO
-    pivot_df["EO_next"] = pivot_df["EO"].shift(-1)  # the 'future' EO
-    pivot_df.dropna(subset=["EO_next"], inplace=True)  # remove last row
-
-    # Features = current PO, Target = next EO
+        pivot_df["PO"] = 0
+    pivot_df["EO_next"] = pivot_df["EO"].shift(-1)
+    pivot_df.dropna(subset=["EO_next"], inplace=True)
+    
     X = pivot_df[["PO"]]
     y = pivot_df["EO_next"]
-
+    
     if len(X) > 2:
         from sklearn.ensemble import RandomForestRegressor
-        # Simple train/test
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import mean_absolute_error, mean_squared_error
+        
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, shuffle=False, random_state=42)
         model = RandomForestRegressor(random_state=42)
         model.fit(X_train, y_train)
-
-        # Evaluate
         y_pred = model.predict(X_test)
         mae = mean_absolute_error(y_test, y_pred)
         rmse = mean_squared_error(y_test, y_pred, squared=False)
-
         st.write(f"MAE: {mae:.2f}, RMSE: {rmse:.2f}")
-
-        # We'll do a final naive prediction: if user wants next EO for the last row's PO
+        
         last_po = pivot_df["PO"].iloc[-1]
         next_eo_pred = model.predict([[last_po]])[0]
-        st.write(f"**Previsão de Próximo EO (Exemplo) com base no PO={last_po}:** {next_eo_pred:.2f}")
-
+        st.write(f"**Previsão de Próximo EO com base no PO = {last_po}:** {next_eo_pred:.2f}")
     else:
         st.warning("Not enough data to run the ML model (need more rows).")
 
@@ -222,15 +206,14 @@ if not filtered_data.empty:
     # STEP 4: Display Table & Download
     # -------------------------------------------------------------------------
     st.markdown("### Detalhes dos Dados Filtrados")
-
     table_df = process_summary.drop(columns="EARLIEST_DATE")
-
+    
     gb = GridOptionsBuilder.from_dataframe(table_df)
     gb.configure_pagination(paginationAutoPageSize=True)
     gb.configure_side_bar()
     gb.configure_default_column(groupable=True, editable=True)
     grid_options = gb.build()
-
+    
     AgGrid(
         table_df,
         gridOptions=grid_options,
@@ -238,13 +221,12 @@ if not filtered_data.empty:
         theme="balham",
         enable_enterprise_modules=False,
     )
-
+    
     st.download_button(
         label="Download Detailed Data as CSV",
         data=table_df.to_csv(index=False).encode("utf-8"),
         file_name="process_summary.csv",
         mime="text/csv",
     )
-
 else:
     st.warning("No data available for the selected filters.")
