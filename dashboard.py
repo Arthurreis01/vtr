@@ -64,7 +64,7 @@ process_filter = st.sidebar.multiselect(
     default=None
 )
 
-# Filter: YEAR RANGE (last item)
+# Filter: YEAR Range
 year_min = int(data["YEAR"].min())
 year_max = int(data["YEAR"].max())
 year_range = st.sidebar.slider(
@@ -97,7 +97,7 @@ st.markdown("## Dashboard de Análise de EO e PO por Processo")
 
 if not filtered_data.empty:
     # -------------------------------------------------------------------------
-    # STEP 1: Summaries - Move above the graphs
+    # STEP 1: Summaries
     # -------------------------------------------------------------------------
     total_summary = (
         filtered_data.groupby("TIPO")["QTDE"]
@@ -113,17 +113,14 @@ if not filtered_data.empty:
     col2.metric("Total PO", f"{total_po}")
 
     # -------------------------------------------------------------------------
-    # STEP 2: One chart only by PROCESSO_AIP (grouped bars)
-    # with bars for EO and PO in new colors (dark blue for EO, green for PO)
+    # STEP 2: EO vs PO by PROCESSO_AIP
     # -------------------------------------------------------------------------
-    # Summarize by process + TIPO
     process_summary = (
         filtered_data.groupby(["PROCESSO_AIP", "TIPO"])["QTDE"]
         .sum()
         .reset_index()
     )
 
-    # Find earliest date per PROCESSO_AIP for sorting
     earliest_dates = (
         filtered_data.groupby("PROCESSO_AIP", as_index=False)["DATA"]
         .min()
@@ -132,7 +129,6 @@ if not filtered_data.empty:
     process_summary = process_summary.merge(earliest_dates, on="PROCESSO_AIP", how="left")
     process_summary = process_summary.sort_values(by="EARLIEST_DATE", ascending=True)
 
-    # Chart #1: Grouped bar by process, color=TIPO (both bars in new colors)
     try:
         chart_by_process = px.bar(
             process_summary,
@@ -158,14 +154,36 @@ if not filtered_data.empty:
         chart_by_process.update_traces(textposition="outside")
         st.plotly_chart(chart_by_process, use_container_width=True)
     except ValueError as e:
-        st.error(f"Failed to create Chart #1: {e}")
+        st.error(f"Failed to create EO vs PO chart: {e}")
 
     # -------------------------------------------------------------------------
-    # STEP 3: Display Table and Download
+    # STEP 3: New Chart – Compras Agrupadas por CAM
+    # -------------------------------------------------------------------------
+    cam_summary = (
+        filtered_data.groupby("CAM")["QTDE"]
+        .sum()
+        .reset_index()
+    )
+
+    try:
+        chart_by_cam = px.bar(
+            cam_summary,
+            x="CAM",
+            y="QTDE",
+            text="QTDE",
+            title="Compras Agrupadas por CAM",
+            labels={"CAM": "CAM", "QTDE": "Quantidade Comprada"}
+        )
+        chart_by_cam.update_traces(textposition="outside")
+        st.plotly_chart(chart_by_cam, use_container_width=True)
+    except Exception as e:
+        st.error(f"Failed to create Compras por CAM chart: {e}")
+
+    # -------------------------------------------------------------------------
+    # STEP 4: Display Table and Download
     # -------------------------------------------------------------------------
     st.markdown("### Detalhes dos Dados Filtrados")
 
-    # We'll display 'process_summary' in the table, dropping the date column used for sorting
     table_df = process_summary.drop(columns="EARLIEST_DATE")
 
     gb = GridOptionsBuilder.from_dataframe(table_df)
