@@ -113,7 +113,7 @@ if not filtered_data.empty:
     col2.metric("Total PO", f"{total_po}")
 
     # -------------------------------------------------------------------------
-    # STEP 2: EO vs PO by PROCESSO_AIP
+    # STEP 2: EO vs PO por PROCESSO_AIP
     # -------------------------------------------------------------------------
     process_summary = (
         filtered_data.groupby(["PROCESSO_AIP", "TIPO"])["QTDE"]
@@ -147,8 +147,8 @@ if not filtered_data.empty:
                 "PROCESSO_AIP": list(process_summary["PROCESSO_AIP"].unique())
             },
             color_discrete_map={
-                "EO": "#E53D00",   # Dark blue for EO
-                "PO": "#F0A202"    # Green for PO
+                "EO": "#E53D00",
+                "PO": "#F0A202"
             }
         )
         chart_by_process.update_traces(textposition="outside")
@@ -157,7 +157,7 @@ if not filtered_data.empty:
         st.error(f"Failed to create EO vs PO chart: {e}")
 
     # -------------------------------------------------------------------------
-    # STEP 3: New Chart – Compras Agrupadas por CAM
+    # STEP 3: Compras Agrupadas por CAM
     # -------------------------------------------------------------------------
     cam_summary = (
         filtered_data.groupby("CAM")["QTDE"]
@@ -180,7 +180,30 @@ if not filtered_data.empty:
         st.error(f"Failed to create Compras por CAM chart: {e}")
 
     # -------------------------------------------------------------------------
-    # STEP 4: Display Table and Download
+    # STEP 4: Compras Agrupadas por PROCESSO_AIP
+    # -------------------------------------------------------------------------
+    proc_buy_summary = (
+        filtered_data.groupby("PROCESSO_AIP")["QTDE"]
+        .sum()
+        .reset_index()
+    )
+
+    try:
+        chart_proc_buy = px.bar(
+            proc_buy_summary,
+            x="PROCESSO_AIP",
+            y="QTDE",
+            text="QTDE",
+            title="Compras Agrupadas por Processo",
+            labels={"PROCESSO_AIP": "Processo", "QTDE": "Quantidade Comprada"}
+        )
+        chart_proc_buy.update_traces(textposition="outside")
+        st.plotly_chart(chart_proc_buy, use_container_width=True)
+    except Exception as e:
+        st.error(f"Failed to create Compras por Processo chart: {e}")
+
+    # -------------------------------------------------------------------------
+    # STEP 5: Display Table and Download
     # -------------------------------------------------------------------------
     st.markdown("### Detalhes dos Dados Filtrados")
 
